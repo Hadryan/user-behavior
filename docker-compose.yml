@@ -1,0 +1,43 @@
+version: '3'
+
+services:
+  kafka:
+    image: wurstmeister/kafka
+    ports:
+     - "9092:9092"
+    hostname: kafka
+    links:
+     - zookeeper
+    environment:
+     - KAFKA_ADVERTISED_HOST_NAME=kafka
+     - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+     - KAFKA_ADVERTISED_PORT=9092
+  create_test_topic:
+    image: wurstmeister/kafka
+    command: opt/kafka/bin/kafka-topics.sh --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 1 --topic actions
+    links:
+     - zookeeper
+  injest_information:
+    image: wurstmeister/kafka
+    volumes:
+      - ${PWD}/data/load/page_views.csv:/page_views.csv:ro
+    command: sh -c "/opt/kafka/bin/kafka-console-producer.sh --broker-list kafka:9092 --topic actions < page_views.csv"
+    links:
+      - kafka    
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+
+  cassandra:
+    image: cassandra
+    ports:
+      - 9042:9042
+  create-timeseries:
+    image: cassandra
+    volumes:
+      - ${PWD}/cql/create-timeseries.cql:/create-timeseries.cql:ro
+    command: cqlsh cassandra 9042 -e "source 'create-timeseries.cql';"
+    links:
+    - cassandra
